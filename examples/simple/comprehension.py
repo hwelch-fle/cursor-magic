@@ -84,3 +84,35 @@ with UpdateCursor(table2, ['OID@'] + table2_fields) as cur:
             # and this is now a language feature and not an implementation detail 
             # like before
             cur.updateRow(list(row.values()))
+            
+# Now that we understand that cursors are lazy generators, we can do some fun things
+
+# Record Count
+record_count: int = sum(1 for _ in SearchCursor(table, ['OID@']))
+
+# This pattern consumes a cursor by iterating all rows and adding 1 for each row.
+# The nice thing about this is that at no point do we ever have more than one record
+# in memory, in this case a (singleton tuple containing the ObjectID)
+# I tend to prefer this to arcpy.GetCount() since the return type of that function is 
+# a pain to deal with (Result[str, ...]).
+
+# This pattern can be expanded upon by passing the Cursor a where_clause of a spatial_filter:
+record_count_where: int = sum(1 for _ in SearchCursor(table, ['OID@'], where_clause='fieldname = <condition>'))
+
+# Because the query doesn't need the field name to be included in the output, you can keep the minimal ['OID@']
+# field list and define whatever field you want in the clause. That field does not need to be included in the output
+# if you don't need it (in this case we need nothing since we're just counting)
+
+# Python sets are a fantastic way to get unique values in a sequence. They have O(1) lookup time best case and O(n) worst case
+# Lets say we have a table with a field that we want unique values from:
+
+unique_values: set[str] = {row['fieldname'] for row in as_dict(SearchCursor(table, ['fieldname']))}
+
+# A table like this:
+# | OID | FIELDNAME|
+# |  1  |   'A'    |
+# |  2  |   'A'    |
+# |  3  |   'C'    |
+# |  4  |   'C'    |
+
+# Would return: {'A, 'B', 'C'}
