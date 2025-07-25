@@ -65,48 +65,15 @@ with F:
 
 # As you can see here, using the with block allows us to run code as an object transitions between scopes
 
-# Lets inspect the Cursor code:
-#class SearchCursor(Iterator[tuple[Any, ...]]):
-#    """Create a read-only cursor on a feature class or table."""
-#
-#    def __init__(
-#        self,
-#        in_table: Any,
-#        field_names: str | Sequence[str],
-#        where_clause: str | None = None,
-#        spatial_reference: str | int | SpatialReference | None = None,
-#        explode_to_points: bool | None = False,
-#        sql_clause: list[str | None] | tuple[str | None, str | None] = (None, None),
-#        datum_transformation: str | None = None,
-#        spatial_filter: Any = None,
-#        spatial_relationship: SpatialRelationship | None = None,
-#        search_order: SearchOrder | None = None,
-#    ) -> None: ...
-#    def __enter__(self) -> Self: ...
-#    def __exit__(
-#        self,
-#        exc_type: type[BaseException],
-#        exc_val: BaseException,
-#        exc_tb: TracebackType | None,
-#    ) -> bool: ...
-#    def __next__(self) -> tuple[Any, ...]: ...
-#    def __iter__(self) -> Iterator[tuple[Any, ...]]: ...
-#    def next(self) -> tuple[Any, ...]: ...
-#    def reset(self) -> None:
-#        """Reset cursor position"""
-#        ...
-#    @property
-#    def fields(self) -> tuple[str, ...]:
-#        """Returns fields name"""
-#        ...
-#    @property
-#    def _dtype(self) -> numpy.dtype[Any]:
-#        """Returns fields numpy dtype"""
-#        ...
-#    def _as_narray(self) -> numpy.record:
-#        """Returns snapshot of the current state as NumPy array."""
+# Lets inspect the SearchCursor code (simplified):
+# class SearchCursor(Iterator[tuple[Any, ...]]):#
+#     def __init__(self, ...) -> None: ...
+#     def __enter__(self) -> Self: ...
+#     def __exit__(self, ...) -> bool: ...
+#     def __next__(self) -> tuple[Any, ...]: ...
+#     def __iter__(self) -> Iterator[tuple[Any, ...]]: ...
 
-# You can see that it implements both the Iterator and the ContextManager protocol:
+# You can see that it implements both the Iterator and the ContextManager protocols:
 
 # class Iterator(Protocol):
 #     def __iter__(self): ...
@@ -115,3 +82,71 @@ with F:
 # class ContextManager(Protocol):
 #     def __enter__(self): ...
 #     def __exit__(self, exc_type, exc_val, exc_tb): ...
+
+# Lets re-do that Foo example above with a cursor:
+print('-'*50)
+print('Cursor Lifetime: \n')
+print('script started')
+
+table = "<Table Path>"
+
+class LoudSearchCursor(SearchCursor):
+    """Wrap a SearchCursor to print when dunders are called"""
+    def __init__(self, *args, **kwargs):
+        self.name = kwargs.pop('name', None)
+        self.level = kwargs.pop('level', 0)
+        super().__init__(*args, **kwargs)
+        print('\t'*self.level, f'Initialized Cursor {self.name}')
+    def __enter__(self):
+        print('\t'*self.level, f'Entering Cursor {self.name}')
+        super().__enter__()
+    def __exit__(self, *args):
+        print('\t'*self.level, f'Exiting Cursor {self.name}')
+        super().__exit__(*args)
+    def __del__(self):
+        print('\t'*self.level, f'Deleting Cursor {self.name}')
+
+GLOBAL_CURSOR = LoudSearchCursor(table, ['OID@'], name='Global Cursor')
+
+with GLOBAL_CURSOR as cur:
+    pass
+
+def buzz():
+    print('buzz Called')
+    local_cursor = LoudSearchCursor(table, ['OID@'], name='buzz Cursor', level=1)
+    print('buzz Completed')
+buzz()
+
+# OUTPUT:
+# script started
+#  Initialized Cursor Global Cursor
+#  Entering Cursor Global Cursor
+#  Exiting Cursor Global Cursor
+# buzz Called
+#          Initialized Cursor buzz Cursor
+# buzz Completed
+#          Deleting Cursor buzz Cursor
+#  Deleting Global Foo...
+#  Deleting Cursor Global Cursor
+
+# Look at that! Global Foo is still in scope until the very end of the script!
+# You can also see that the local_cursor is deleted as soon as the function it lives in exits
+
+# Of note here is that you don't have to call del on local cursors if you put them in a function and
+# the function returns after you finish using the cursor
+
+# Now lets try this in a comprehension:
+
+print('Getting Vals')
+vals = [row[0] for row in LoudSearchCursor(table, ['OID@'], name='Comprehension Cursor', level=1)]
+print('Got Vals')
+
+# OUTPUT:
+# Getting Vals
+#      Initialized Cursor Comprehension Cursor
+#      Deleting Cursor Comprehension Cursor
+# Got Vals
+# Deleting Global Foo...
+# Deleting Cursor Global Cursor
+
+# Look at that! Even though we never deleted the cursor, it was deleted as soon as the comprehension completed!
