@@ -163,6 +163,8 @@ class TableUpdater:
             with self.target_editor, UpdateCursor(self.target_table, self.fields, where_clause=where_clause) as cur:
                 changes['deletes'] = [cur.deleteRow() or oid for oid, *_ in cur]
         
+        # Clear the diff after operations are completed in case the object is re-used later
+        self._table_diff = None
         return changes
     
 def main():
