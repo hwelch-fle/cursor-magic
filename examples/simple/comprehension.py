@@ -84,9 +84,55 @@ with UpdateCursor(table2, ['OID@'] + table2_fields) as cur:
             # and this is now a language feature and not an implementation detail 
             # like before
             cur.updateRow(list(row.values()))
-            
-# Now that we understand that cursors are lazy generators, we can do some fun things
 
+
+
+# The above code can be done with a comprehension!
+
+def dict_vals(d: dict) -> list:
+    """This function just makes the value conversion less cluttered"""
+    return list(d.values())
+
+with UpdateCursor(table2, ['OID@'] + table2_fields) as cur: # 1
+    updated_records: list[int] = [                          # 2
+        cur.updateRow(                                      # 3
+            dict_vals(dict_comp_record[row['OID@']])        # 4
+        ) or row['OID@']                                    # 5
+        for row in as_dict(cur)                             # 6
+        if row['OID'] in dict_comp_record                   # 7
+    ]
+
+# This is a monster of a comprehension. Lets break it down:
+# 1) A cursor is initialized using its __enter__/context manager method
+# 2) We declare a variable that will be of type list[int]
+#    that will be used to collect OIDs of updated rows
+# NOTE: 3-7 are in reversed order because comprehensions are read from bottom to top
+# This is beause the meat of the comprehension is meant to be read first (the return values)
+# and the filtering is read after so you immediately know what a comprehension creates then see
+# how it creates it
+# 7) Make sure that the current row has a matching record in the update mapping
+# 6) Iterate the rows with the fields mapped to values
+# 5) Because `updateRow` returns `None`, we can use an `or` statment to fallthrough to another value
+#    In this case the fallthrough is row['OID@'] becasue we want to collect updated row IDs
+# 4) We pull the row value of the matching update record
+# 3) We update the row with that record
+
+# Honestly, this is not a very good way to write this code, just because it's possible doesn't mean you 
+# should do it. Here's a more readable version:
+
+updated_records: list[int] = []
+with UpdateCursor(table2, ['OID@'] + table2_fields) as cur:
+    for row in as_dict(cur):
+        oid = row['OID@']
+        if oid not in dict_comp_record:
+            continue
+        cur.updateRow(dict_vals(dict_comp_record[oid]))
+        updated_records.append(oid)
+
+# As you can see, the comprehension is not that much shorter than the regular method and only
+# saves on one assignment (oid), which should be there for readability's sake
+
+# Now that we understand that cursors are lazy generators, we can do some fun things
 # Record Count
 record_count: int = sum(1 for _ in SearchCursor(table, ['OID@']))
 
