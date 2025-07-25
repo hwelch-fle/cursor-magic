@@ -167,8 +167,8 @@ class TableUpdater:
     
 def main():
     from pprint import pprint
-    source = r'C:\Users\hwelch\Documents\ArcGIS\Projects\Updator_testing\Updator_testing.gdb\Lines'
-    target = r'C:\Users\hwelch\Documents\ArcGIS\Projects\Updator_testing\Updator_testing.gdb\Lines_1'
+    source = r'source_table'
+    target = r'target_table'
     
     table_updater = TableUpdater(source, target)
     changes = table_updater.apply_changes()
