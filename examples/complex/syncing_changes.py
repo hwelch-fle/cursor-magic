@@ -177,7 +177,7 @@ def main():
     print(f"Updated {len(changes['updates'])} rows")
     print(f"Inserted {len(changes['inserts'])} rows")
     print(f"Deleted {len(changes['deletes'])} rows")
-    pprint(changes)
+    print(changes)
     
 if __name__ == '__main__':
     main()
